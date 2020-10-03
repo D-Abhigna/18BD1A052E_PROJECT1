@@ -1,107 +1,113 @@
-const express= require('express');
+const express=require('express');
 const app=express();
+
 const bodyParser=require('body-parser');
+app.use(bodyParser.urlencoded({extended:true}));
+app.use(bodyParser.json());
+
 const MongoClient=require('mongodb').MongoClient;
+
+let server=require('./server');
+let config=require('./config');
+let middleware=require('./middleware');
+const response=require('express');
+
+
+//DATABASE CONNECTION
 const url='mongodb://127.0.0.1:27017';
-const dbName="hospital_Management";
-const col_name="hospital";
-const coll_name="ventilators";
-const middleware=require('middleware');
-let db;
+const dbName='hospital_Management';
+let db
 
-app.use(bodyParser.urlencoded({extended: true}));
-app.use(bodyParser.json({ type: 'application/json' }))
-
-
-//CONNECTING TO DATABASE
-MongoClient.connect(url, (err,client)=>{
-        if(err) return console.log(err);
-        db=client.db(dbName);
-   
-    console.log(`Connected Database: ${url}`);
-        console.log(`Database : ${dbName}`);
-    });
-
-
-//READING HOSPITAL DETAILS
-app.get('/h',(req,res)=>{
-    db.collection(col_name).find().toArray((err,result)=>{
-        if(err) throw err;
-        res.status(200).send(result)
-    })
+MongoClient.connect(url,{useUnifiedTopology:true}, (err,client)=>{
+    if(err) return console.log(err);
+    db=client.db(dbName);
+    console.log(`Connected MongoDB: ${url}`);
+    console.log(`Database: ${dbName}`);
 })
 
-//READING VENTILATOR DETAILS
-app.get('/v',(req,res)=>{
-    db.collection(coll_name).find().toArray((err,result)=>{
-        if(err) throw err;
-        res.status(200).send(result)
-    })
-})
-//SEARCH VENTILATORS BY STATUS 
-app.post('/searchs',(req,res)=>{
-    var status= req.body.status;
-    console.log(status);
-    var v=db.collection(coll_name).find( {"status":status}).toArray().then(result=> res.json(result));
-  
+
+//HOSPITAL DETAILS
+app.get('/hospitaldetails',middleware.checkToken,function(req,res){
+    console.log("Fetching data from Hospital collection");
+    var data=db.collection('hospital').find().toArray().then(result=>res.json(result));
 });
+
+
+
+//VENTILATOR DETAILS
+app.get('/ventilatordetails',middleware.checkToken,(req,res)=>{
+    console.log("Ventilators Information");
+    var ventilatordetails=db.collection('ventilators')
+    .find().toArray().then(result=>res.json(result));
+});
+
+
+//SEARCH VENTILATORS BY STATUS
+app.post('/searchventbystatus',middleware.checkToken,(req,res)=>{
+    var Status=req.body.Status;
+    console.log(Status);
+    var ventilatordetails=db.collection('ventilators')
+    .find({"Status":Status}).toArray().then(result=>res.json(result));
+});
+
 
 //SEARCH VENTILATORS BY HOSPITAL NAME
-app.post('/searchn',(req,res)=>{
-    var name=req.body.name;
+app.post('/searchventbyname',middleware.checkToken,(req,res)=>{
+    var name=req.query.name;
     console.log(name);
-    var n=db.collection(coll_name).find({"name":name}).toArray().then(result => res.json(result));
+    var ventilatordetails=db.collection('ventilators')
+    .find({'name':new RegExp(name,'i')}).toArray().then(result=>res.json(result));
 });
+
 
 //SEARCH HOSPITAL BY NAME
-app.post('/searchh',(req,res)=>{
-    var name=req.body.name;
+app.post('/searchhospital',middleware.checkToken,(req,res)=>{
+    var name=req.query.name;
     console.log(name);
-    var h=db.collection(col_name).find({"name":name}).toArray().then(result => res.json(result));
+    var hospitaldetails=db.collection('hospital')
+    .find({'name': new RegExp(name,'i') }).toArray().then(result=>res.json(result));
 });
 
-//UPDATING VENTILATOR DETAILS 
-//UPDATED KIMS VENTILATOR STATUS FROM OCCUPIED TO VACANT
-app.put('/u',(req,res)=>{
-    var vid= {vId:req.body.vId};
-    console.log(vid);
-    var value={ $set:{ status:req.body.status} };
-    db.collection(coll_name).updateOne(vid,value,function(err,result){
-        res.json("UPDATED");
+//UPDATE VENTILATOR DETAILS
+app.put('/updateventilator',middleware.checkToken,(req,res)=>{
+    var ventid={ventilatorId:req.body.ventilatorId};
+    console.log(ventid);
+    var newvalues={$set:{Status:req.body.Status}};
+    db.collection("ventilators").updateOne(ventid,newvalues,function(err,result){
+        res.json('1 document updated');
         if(err) throw err;
-        console.log("documnet updated");
     });
 });
 
-//ADDING VENTILATOR
-//ADDED TWO HOSPITALS RAINBOW AND NIMS
-app.put('/addv',(req,res)=>{
+
+//ADD VENTILATOR
+app.post('/addventilator',middleware.checkToken,(req,res)=>{
     var hId=req.body.hId;
-    var vId=req.body.vId;
-    var status=req.body.status;
+    var ventilatorId=req.body.ventilatorId;
+    var Status=req.body.Status;
     var name=req.body.name;
-    var value={hId:req.body.hId,vId:req.body.vId,status:req.body.status,name:req.body.name};
-    db.collection(coll_name).insert(value,function(err,result){
-        res.json("ADDED");
-        if(err) throw err;
-        console.log("documnet has been added");
-    });
-    
-})
 
-//DELTE VENTILATOR BY VENT ID 
-//DELETED APPOLLO HOSPITAL H1V5
-app.delete('/delv',(req,res)=>{
-    
-    var vId=req.body.vId;
-    
-    var value={vId:req.body.vId};
-    db.collection(coll_name).deleteOne(value,function(err,result){
-        res.json("DELETD");
-        if(err) throw err;
-        console.log("documnet Deleted");
+    var item=
+    {
+        hId:hId,ventilatorId:ventilatorId,Status:Status,name:name
+    };
+    db.collection('ventilators').insertOne(item,function(err,result){
+        res.json('Item inserted');
     });
-    
-})
+});
 
-app.listen(3000);
+
+//DELETE VENTILATOR BY VENT-ID
+app.delete('/delete',middleware.checkToken,(req,res)=>{
+    var myquery=req.query.ventilatorId;
+    console.log(myquery);
+
+    var myquery1={ventilatorId:myquery};
+    db.collection('ventilators').deleteOne(myquery1,function(err,obj)
+    {
+        if(err) throw err;
+        res.json("1 document deleted");
+    });
+});
+
+app.listen(1100)
